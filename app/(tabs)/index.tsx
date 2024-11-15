@@ -21,6 +21,8 @@ export default function SimonSaysGame() {
   const [record, setRecord] = useState<number>(0);
   const [memoryMode, setMemoryMode] = useState<boolean>(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [timer, setTimer] = useState<number | null>(null);
+  const [lastTilt, setLastTilt] = useState<Direction | null>(null);
 
   const TILT_THRESHOLD = 0.5;
 
@@ -32,21 +34,51 @@ export default function SimonSaysGame() {
 
   const detectTilt = (): Direction => {
     const { x = 0, y = 0 } = accelerometerData;
-    if (x > TILT_THRESHOLD) return "left";
-    if (x < -TILT_THRESHOLD) return "right";
-    if (y > TILT_THRESHOLD) return "down";
-    if (y < -TILT_THRESHOLD) return "up";
-    return null;
+    let tilt: Direction = null;
+
+    if (x > TILT_THRESHOLD) tilt = "left";
+    else if (x < -TILT_THRESHOLD) tilt = "right";
+    else if (y > TILT_THRESHOLD) tilt = "down";
+    else if (y < -TILT_THRESHOLD) tilt = "up";
+
+    return tilt;
   };
 
   useEffect(() => {
     if (isPlayerTurn && playerMoves.length < sequence.length) {
       const tilt = detectTilt();
       if (tilt && tilt !== playerMoves[playerMoves.length - 1]) {
-        setPlayerMoves([...playerMoves, tilt]);
+        setPlayerMoves((prevMoves) => {
+          Vibration.vibrate(50); // Vibrate when a move is added
+          return [...prevMoves, tilt];
+        });
       }
     }
   }, [accelerometerData]);
+
+  useEffect(() => {
+    if (isPlayerTurn) {
+      setTimer(10); // Initialize the timer with 10 seconds
+
+      const interval = setInterval(() => {
+        setTimer((prev) => (prev !== null ? prev - 1 : null));
+      }, 1000);
+
+      return () => clearInterval(interval); // Clear timer when turn ends or component unmounts
+    } else {
+      setTimer(null); // Reset timer when it's not the player's turn
+    }
+  }, [isPlayerTurn]);
+
+  useEffect(() => {
+    if (timer === 0) {
+      setMessage(`Game Over! Final Score: ${score}`);
+      if (score > record) setRecord(score);
+      setScore(0);
+      Vibration.vibrate(500);
+      resetGame();
+    }
+  }, [timer]);
 
   useEffect(() => {
     if (isPlayerTurn && playerMoves.length > 0) {
@@ -120,6 +152,9 @@ export default function SimonSaysGame() {
   return (
     <View style={styles.container}>
       <Animated.Text style={[styles.header, { opacity: fadeAnim }]}>Simon Says</Animated.Text>
+      <Text style={styles.timer}>
+        {isPlayerTurn ? `Time Left: ${timer}s` : ''}
+      </Text>
       <Text style={styles.message}>{message}</Text>
       <Text style={styles.sequence}>
         {(!isPlayerTurn || !memoryMode) ? sequence.map(getDirectionEmoji).join(" ") : "🔒"}
@@ -157,6 +192,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 20,
+  },
+  timer: {
+    fontSize: 20,
+    color: '#ffca28',
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
   message: {
     fontSize: 20,
