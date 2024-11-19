@@ -1,109 +1,273 @@
-import { StyleSheet, Image, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Vibration, Animated } from 'react-native';
+import { Accelerometer } from 'expo-sensors';
+import * as Speech from 'expo-speech';
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+type AccelerometerData = {
+  x?: number;
+  y?: number;
+  z?: number;
+};
 
-export default function TabTwoScreen() {
+type Direction = 'up' | 'down' | 'left' | 'right' | null;
+
+export default function SimonSaysTwoPlayer() {
+  const [accelerometerData, setAccelerometerData] = useState<AccelerometerData>({});
+  const [sequence, setSequence] = useState<Direction[]>([]);
+  const [playerMoves, setPlayerMoves] = useState<Direction[]>([]);
+  const [isPlayerTurn, setIsPlayerTurn] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>("Press Start to Play");
+  const [currentPlayer, setCurrentPlayer] = useState<number>(1);
+  const [player1Score, setPlayer1Score] = useState<number>(0);
+  const [player2Score, setPlayer2Score] = useState<number>(0);
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [timer, setTimer] = useState<number | null>(null);
+
+  const TILT_THRESHOLD = 0.5;
+
+  useEffect(() => {
+    Accelerometer.setUpdateInterval(200);
+    const subscription = Accelerometer.addListener((data) => setAccelerometerData(data));
+    return () => subscription && subscription.remove();
+  }, []);
+
+  const detectTilt = (): Direction => {
+    const { x = 0, y = 0 } = accelerometerData;
+    let tilt: Direction = null;
+
+    if (x > TILT_THRESHOLD) tilt = "left";
+    else if (x < -TILT_THRESHOLD) tilt = "right";
+    else if (y > TILT_THRESHOLD) tilt = "down";
+    else if (y < -TILT_THRESHOLD) tilt = "up";
+
+    return tilt;
+  };
+
+  useEffect(() => {
+    if (isPlayerTurn && playerMoves.length < sequence.length) {
+      const tilt = detectTilt();
+      if (tilt && tilt !== playerMoves[playerMoves.length - 1]) {
+        Vibration.vibrate(50); // Vibrate when a tilt is registered
+        setPlayerMoves((prevMoves) => [...prevMoves, tilt]);
+      }
+    }
+  }, [accelerometerData]);
+
+  useEffect(() => {
+    if (isPlayerTurn) {
+      setTimer(10);
+
+      const interval = setInterval(() => {
+        setTimer((prev) => (prev !== null ? prev - 1 : null));
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setTimer(null);
+    }
+  }, [isPlayerTurn]);
+
+  useEffect(() => {
+    if (timer === 0) {
+      handlePlayerLoss();
+    }
+  }, [timer]);
+
+  useEffect(() => {
+    if (isPlayerTurn && playerMoves.length > 0) {
+      const lastMoveIndex = playerMoves.length - 1;
+      if (playerMoves[lastMoveIndex] !== sequence[lastMoveIndex]) {
+        handlePlayerLoss();
+      } else if (playerMoves.length === sequence.length) {
+        setMessage("Correct! Next round...");
+        updateScore();
+        Vibration.vibrate([0, 100, 100, 100]); // Vibrate for successful completion
+        nextRound();
+      }
+    }
+  }, [playerMoves]);
+
+  const updateScore = () => {
+    if (currentPlayer === 1) {
+      setPlayer1Score(player1Score + 1);
+    } else {
+      setPlayer2Score(player2Score + 1);
+    }
+  };
+
+  const handlePlayerLoss = () => {
+    Vibration.vibrate(500); // Long vibration for loss
+    if (currentPlayer === 1) {
+      setMessage("Player 1's turn is over! Player 2, get ready!");
+      setCurrentPlayer(2);
+      resetGameForNextPlayer();
+    } else {
+      setMessage(determineWinner());
+      resetGame();
+    }
+  };
+
+  const determineWinner = (): string => {
+    if (player1Score > player2Score) {
+      return `Player 1 Wins! Final Scores - Player 1: ${player1Score}, Player 2: ${player2Score}`;
+    } else if (player2Score > player1Score) {
+      return `Player 2 Wins! Final Scores - Player 1: ${player1Score}, Player 2: ${player2Score}`;
+    } else {
+      return `It's a Tie! Final Scores - Player 1: ${player1Score}, Player 2: ${player2Score}`;
+    }
+  };
+
+  const resetGameForNextPlayer = () => {
+    setSequence(generateSequence(1)); // Start fresh with one movement
+    setPlayerMoves([]);
+    setIsPlayerTurn(false);
+    setTimeout(() => {
+      setMessage(`Player 2: Watch the sequence!`);
+      narrateSequence(sequence);
+      setTimeout(() => {
+        setMessage("Your turn!");
+        setIsPlayerTurn(true);
+      }, 1000 * sequence.length);
+    }, 2000);
+  };
+
+  const resetGame = () => {
+    setSequence([]);
+    setPlayerMoves([]);
+    setIsPlayerTurn(false);
+    setPlayer1Score(0);
+    setPlayer2Score(0);
+    setCurrentPlayer(1);
+    Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start();
+  };
+
+  const nextRound = () => {
+    const newSequence = generateSequence();
+    setSequence(newSequence);
+    setPlayerMoves([]);
+    setIsPlayerTurn(false);
+    narrateSequence(newSequence);
+    setTimeout(() => {
+      setMessage("Your turn!");
+      setIsPlayerTurn(true);
+    }, 1000 * newSequence.length);
+  };
+
+  const generateSequence = (length = sequence.length + 1): Direction[] => {
+    const directions: Direction[] = ["up", "down", "left", "right"];
+    const newSequence = [...Array(length)].map(
+      () => directions[Math.floor(Math.random() * 4)]
+    );
+    return newSequence;
+  };
+
+  const startGame = () => {
+    resetGame();
+    setMessage("Player 1: Watch the sequence!");
+    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    nextRound();
+  };
+
+  const narrateSequence = (seq: Direction[]) => {
+    seq.forEach((direction, index) => {
+      setTimeout(() => Speech.speak(direction || ""), index * 1000);
+    });
+  };
+
+  const getDirectionEmoji = (direction: Direction): string => {
+    switch (direction) {
+      case "up": return "⬆️";
+      case "down": return "⬇️";
+      case "left": return "⬅️";
+      case "right": return "➡️";
+      default: return "";
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <Animated.Text style={[styles.header, { opacity: fadeAnim }]}>
+        {`Player ${currentPlayer}'s Turn`}
+      </Animated.Text>
+      <Text style={styles.timer}>
+        {isPlayerTurn ? `Time Left: ${timer}s` : ''}
+      </Text>
+      <Text style={styles.message}>{message}</Text>
+      <Text style={styles.sequence}>
+        {sequence.map(getDirectionEmoji).join(" ")}
+      </Text>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={startGame}
+      >
+        <Text style={styles.buttonText}>Start Game</Text>
+      </TouchableOpacity>
+      <View style={styles.scoreBoard}>
+        <Text style={styles.score}>Player 1 Score: {player1Score}</Text>
+        <Text style={styles.score}>Player 2 Score: {player2Score}</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    padding: 20,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  header: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 20,
+  },
+  timer: {
+    fontSize: 20,
+    color: '#ffca28',
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  message: {
+    fontSize: 20,
+    color: '#b0bec5',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  sequence: {
+    fontSize: 24,
+    color: '#80cbc4',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#1e88e5',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 5,
+    marginVertical: 10,
+    width: '60%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 18,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  scoreBoard: {
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#263238',
+    borderRadius: 10,
+    marginTop: 20,
+    width: '80%',
+  },
+  score: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#80cbc4',
   },
 });
