@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Vibration, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Vibration, Animated, TextInput } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import * as Speech from 'expo-speech';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, User } from 'firebase/auth';
+
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBuLGcoC7YOURp4-A6MpnEGsRlRBahB2BE",
+  authDomain: "thperiod-b1527.firebaseapp.com",
+  projectId: "thperiod-b1527",
+  storageBucket: "thperiod-b1527.firebasestorage.app",
+  messagingSenderId: "404636633714",
+  appId: "1:404636633714:web:e29c4380f322f17b6fd0eb",
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 type AccelerometerData = {
   x?: number;
@@ -11,18 +27,22 @@ type AccelerometerData = {
 
 type Direction = 'up' | 'down' | 'left' | 'right' | null;
 
-export default function SimonSaysGame() {
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
   const [accelerometerData, setAccelerometerData] = useState<AccelerometerData>({});
   const [sequence, setSequence] = useState<Direction[]>([]);
   const [playerMoves, setPlayerMoves] = useState<Direction[]>([]);
   const [isPlayerTurn, setIsPlayerTurn] = useState<boolean>(false);
-  const [message, setMessage] = useState<string>("Press Start to Play");
+  const [message, setMessage] = useState<string>('Press Start to Play');
   const [score, setScore] = useState<number>(0);
   const [record, setRecord] = useState<number>(0);
   const [memoryMode, setMemoryMode] = useState<boolean>(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [timer, setTimer] = useState<number | null>(null);
-  const [lastTilt, setLastTilt] = useState<Direction | null>(null);
 
   const TILT_THRESHOLD = 0.5;
 
@@ -36,10 +56,10 @@ export default function SimonSaysGame() {
     const { x = 0, y = 0 } = accelerometerData;
     let tilt: Direction = null;
 
-    if (x > TILT_THRESHOLD) tilt = "left";
-    else if (x < -TILT_THRESHOLD) tilt = "right";
-    else if (y > TILT_THRESHOLD) tilt = "down";
-    else if (y < -TILT_THRESHOLD) tilt = "up";
+    if (x > TILT_THRESHOLD) tilt = 'left';
+    else if (x < -TILT_THRESHOLD) tilt = 'right';
+    else if (y > TILT_THRESHOLD) tilt = 'down';
+    else if (y < -TILT_THRESHOLD) tilt = 'up';
 
     return tilt;
   };
@@ -49,7 +69,7 @@ export default function SimonSaysGame() {
       const tilt = detectTilt();
       if (tilt && tilt !== playerMoves[playerMoves.length - 1]) {
         setPlayerMoves((prevMoves) => {
-          Vibration.vibrate(50); // Vibrate when a move is added
+          Vibration.vibrate(50);
           return [...prevMoves, tilt];
         });
       }
@@ -58,15 +78,15 @@ export default function SimonSaysGame() {
 
   useEffect(() => {
     if (isPlayerTurn) {
-      setTimer(10); // Initialize the timer with 10 seconds
+      setTimer(10);
 
       const interval = setInterval(() => {
         setTimer((prev) => (prev !== null ? prev - 1 : null));
       }, 1000);
 
-      return () => clearInterval(interval); // Clear timer when turn ends or component unmounts
+      return () => clearInterval(interval);
     } else {
-      setTimer(null); // Reset timer when it's not the player's turn
+      setTimer(null);
     }
   }, [isPlayerTurn]);
 
@@ -90,7 +110,7 @@ export default function SimonSaysGame() {
         Vibration.vibrate(500);
         resetGame();
       } else if (playerMoves.length === sequence.length) {
-        setMessage("Correct! Next round...");
+        setMessage('Correct! Next round...');
         setScore(score + 1);
         Vibration.vibrate([0, 100, 100, 100]);
         nextRound();
@@ -112,13 +132,13 @@ export default function SimonSaysGame() {
     setIsPlayerTurn(false);
     narrateSequence(newSequence);
     setTimeout(() => {
-      setMessage("Your turn!");
+      setMessage('Your turn!');
       setIsPlayerTurn(true);
     }, 1000 * (newSequence.length + 1));
   };
 
   const generateSequence = (): Direction[] => {
-    const directions: Direction[] = ["up", "down", "left", "right"];
+    const directions: Direction[] = ['up', 'down', 'left', 'right'];
     let newDirection: Direction;
     do {
       newDirection = directions[Math.floor(Math.random() * 4)];
@@ -128,36 +148,86 @@ export default function SimonSaysGame() {
 
   const startGame = () => {
     setScore(0);
-    setMessage("Watch the sequence...");
+    setMessage('Watch the sequence...');
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     nextRound();
   };
 
   const narrateSequence = (seq: Direction[]) => {
     seq.forEach((direction, index) => {
-      setTimeout(() => Speech.speak(direction || ""), index * 1000);
+      setTimeout(() => Speech.speak(direction || ''), index * 1000);
     });
   };
 
   const getDirectionEmoji = (direction: Direction): string => {
     switch (direction) {
-      case "up": return "⬆️";
-      case "down": return "⬇️";
-      case "left": return "⬅️";
-      case "right": return "➡️";
-      default: return "";
+      case 'up':
+        return '⬆️';
+      case 'down':
+        return '⬇️';
+      case 'left':
+        return '⬅️';
+      case 'right':
+        return '➡️';
+      default:
+        return '';
     }
   };
+
+  const handleLogin = async () => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      setUser(userCredential.user);
+    } catch (err) {
+      setError('Login failed. Please check your credentials.');
+    }
+  };
+
+  const handleSignup = async () => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      setUser(userCredential.user);
+    } catch (err) {
+      setError('Signup failed. Please try again.');
+    }
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.header}>Simon Says - Login</Text>
+        {error && <Text style={styles.error}>{error}</Text>}
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <TouchableOpacity style={styles.button} onPress={handleLogin}>
+          <Text style={styles.buttonText}>Login</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={handleSignup}>
+          <Text style={styles.buttonText}>Signup</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Animated.Text style={[styles.header, { opacity: fadeAnim }]}>Simon Says</Animated.Text>
-      <Text style={styles.timer}>
-        {isPlayerTurn ? `Time Left: ${timer}s` : ''}
-      </Text>
+      <Text style={styles.timer}>{isPlayerTurn ? `Time Left: ${timer}s` : ''}</Text>
       <Text style={styles.message}>{message}</Text>
       <Text style={styles.sequence}>
-        {(!isPlayerTurn || !memoryMode) ? sequence.map(getDirectionEmoji).join(" ") : "🔒"}
+        {(!isPlayerTurn || !memoryMode) ? sequence.map(getDirectionEmoji).join(' ') : '🔒'}
       </Text>
       <TouchableOpacity
         style={[styles.button, (isPlayerTurn || sequence.length > 0) && styles.buttonDisabled]}
@@ -168,7 +238,7 @@ export default function SimonSaysGame() {
       </TouchableOpacity>
       <TouchableOpacity style={styles.memoryModeButton} onPress={() => setMemoryMode(!memoryMode)}>
         <Text style={styles.memoryButtonText}>
-          {memoryMode ? "Memory Mode: ON" : "Memory Mode: OFF"}
+          {memoryMode ? 'Memory Mode: ON' : 'Memory Mode: OFF'}
         </Text>
       </TouchableOpacity>
       <View style={styles.scoreBoard}>
@@ -193,24 +263,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 20,
   },
-  timer: {
-    fontSize: 20,
-    color: '#ffca28',
-    marginBottom: 10,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  message: {
-    fontSize: 20,
-    color: '#b0bec5',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  sequence: {
-    fontSize: 24,
-    color: '#80cbc4',
-    textAlign: 'center',
-    marginBottom: 20,
+  input: {
+    backgroundColor: '#ffffff',
+    width: '80%',
+    padding: 10,
+    marginVertical: 10,
+    borderRadius: 5,
   },
   button: {
     backgroundColor: '#1e88e5',
@@ -259,5 +317,29 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#ffca28',
     marginTop: 5,
+  },
+  sequence: {
+    fontSize: 24,
+    color: '#80cbc4',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  timer: {
+    fontSize: 20,
+    color: '#ffca28',
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  error: {
+    color: '#ff4444',
+    marginBottom: 10,
+    fontSize: 16,
+  },
+  message: {
+    fontSize: 20,
+    color: '#b0bec5',
+    textAlign: 'center',
+    marginBottom: 10,
   },
 });
