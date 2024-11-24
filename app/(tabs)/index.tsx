@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Vibration, Animated, TextInput } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Vibration, Animated, TextInput, Modal, FlatList } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import * as Speech from 'expo-speech';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, User } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection, query, limit, orderBy, getDocs } from 'firebase/firestore';
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const firestore = getFirestore(app);
 
 type AccelerometerData = {
   x?: number;
@@ -45,6 +47,88 @@ export default function App() {
   const [timer, setTimer] = useState<number | null>(null);
 
   const TILT_THRESHOLD = 0.5;
+
+  // Load the user's record score from Firestore
+  const loadRecord = async () => {
+    if (!user) return;
+    try {
+      const docRef = doc(firestore, 'scores', user.uid); // Scores are saved under the user's UID
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setRecord(docSnap.data()?.record || 0); // Load record if available
+      }
+    } catch (err) {
+      console.error('Failed to fetch record:', err);
+    }
+  };
+
+  // Save the user's record score to Firestore
+  // const saveRecord = async (score: number) => {
+  //   if (!user) return;
+  //   try {
+  //     const docRef = doc(firestore, 'scores', user.uid);
+  //     await setDoc(docRef, { score }, { merge: true });
+  //     console.log(score)
+  //     console.log(`Record saved successfully for user ${user.uid}: ${score}`);
+  //   } catch (err) {
+  //     console.error("Failed to save record:", err);
+  //   }
+  // };
+  const saveRecord = async (score: number) => {
+    if (!user) {
+      console.error("User not logged in. Cannot save record.");
+      return;
+    }
+    try {
+      const docRef = doc(firestore, 'scores', user.uid);
+      await setDoc(docRef, { record: score }, { merge: true }); // Save user's private record
+  
+      const leaderboardRef = doc(firestore, 'leaderboard', user.uid);
+      await setDoc(leaderboardRef, { email: user.email, record: score }, { merge: true }); // Save to leaderboard
+  
+      console.log(`Record and leaderboard updated successfully for user ${user.uid}: ${score}`);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Failed to save record:", err.message);
+      } else {
+        console.error("An unexpected error occurred:", err);
+      }
+    }
+  };
+  
+
+  const [leaderboard, setLeaderboard] = useState<{ email: string; record: number }[]>([]);
+  const [isLeaderboardVisible, setLeaderboardVisible] = useState<boolean>(false);
+
+  const fetchLeaderboard = async () => {
+    try {
+      const leaderboardRef = collection(firestore, 'leaderboard');
+      const q = query(leaderboardRef, orderBy('record', 'desc'), limit(10)); // Fetch top 10 scores
+      const querySnapshot = await getDocs(q);
+  
+      const leaderboardData = querySnapshot.docs.map((doc) => ({
+        email: doc.data().email,
+        record: doc.data().record,
+      }));
+  
+      return leaderboardData;
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Failed to fetch leaderboard:", err.message);
+      } else {
+        console.error("An unexpected error occurred:", err);
+      }
+      return [];
+    }
+  };
+  
+  
+
+  useEffect(() => {
+    if (user) {
+      loadRecord(); // Fetch record when the user logs in
+    }
+  }, [user]);
 
   useEffect(() => {
     Accelerometer.setUpdateInterval(200);
@@ -93,7 +177,10 @@ export default function App() {
   useEffect(() => {
     if (timer === 0) {
       setMessage(`Game Over! Final Score: ${score}`);
-      if (score > record) setRecord(score);
+      if (score > record) {
+        setRecord(score); // Update the record if the score is higher
+        saveRecord(score); // Save the new record to Firestore
+      }
       setScore(0);
       Vibration.vibrate(500);
       resetGame();
@@ -105,7 +192,10 @@ export default function App() {
       const lastMoveIndex = playerMoves.length - 1;
       if (playerMoves[lastMoveIndex] !== sequence[lastMoveIndex]) {
         setMessage(`Game Over! Final Score: ${score}`);
-        if (score > record) setRecord(score);
+        if (score > record) {
+          setRecord(score); // Update the record if the score is higher
+          saveRecord(score); // Save the new record to Firestore
+        }
         setScore(0);
         Vibration.vibrate(500);
         resetGame();
@@ -220,9 +310,29 @@ export default function App() {
       </View>
     );
   }
-
+  
   return (
     <View style={styles.container}>
+      {/* Leaderboard Modal */}
+      <Modal visible={isLeaderboardVisible} animationType="slide">
+        <View style={styles.container}>
+          <Text style={styles.header}>Leaderboard</Text>
+          <FlatList
+            data={leaderboard}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => (
+              <Text style={styles.leaderboardItem}>
+                {item.email}: {item.record}
+              </Text>
+            )}
+          />
+          <TouchableOpacity style={styles.button} onPress={() => setLeaderboardVisible(false)}>
+            <Text style={styles.buttonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+  
+      {/* Main Game UI */}
       <Animated.Text style={[styles.header, { opacity: fadeAnim }]}>Simon Says</Animated.Text>
       <Text style={styles.timer}>{isPlayerTurn ? `Time Left: ${timer}s` : ''}</Text>
       <Text style={styles.message}>{message}</Text>
@@ -241,13 +351,23 @@ export default function App() {
           {memoryMode ? 'Memory Mode: ON' : 'Memory Mode: OFF'}
         </Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={async () => {
+          const leaderboardData = await fetchLeaderboard();
+          setLeaderboard(leaderboardData);
+          setLeaderboardVisible(true);
+        }}
+      >
+        <Text style={styles.buttonText}>View Leaderboard</Text>
+      </TouchableOpacity>
       <View style={styles.scoreBoard}>
         <Text style={styles.score}>Score: {score}</Text>
         <Text style={styles.record}>Record: {record}</Text>
       </View>
     </View>
   );
-}
+}  
 
 const styles = StyleSheet.create({
   container: {
@@ -341,5 +461,10 @@ const styles = StyleSheet.create({
     color: '#b0bec5',
     textAlign: 'center',
     marginBottom: 10,
+  },
+  leaderboardItem: {
+    fontSize: 18,
+    color: '#ffffff',
+    padding: 5,
   },
 });
