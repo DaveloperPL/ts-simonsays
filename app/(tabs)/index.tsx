@@ -322,10 +322,11 @@ export default function App() {
             keyExtractor={(item, index) => index.toString()}
             renderItem={({ item }) => (
               <Text style={styles.leaderboardItem}>
-                {item.email}: {item.record}
+                {item.email.slice(0, 4)}**** : {item.record} Points
               </Text>
             )}
           />
+
           <TouchableOpacity style={styles.button} onPress={() => setLeaderboardVisible(false)}>
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
