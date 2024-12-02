@@ -322,7 +322,7 @@ export default function App() {
             keyExtractor={(item, index) => index.toString()}
             renderItem={({ item }) => (
               <Text style={styles.leaderboardItem}>
-                {item.email.slice(0, 4)}**** : {item.record} Points
+                {item.email} : {item.record} Points
               </Text>
             )}
           />
