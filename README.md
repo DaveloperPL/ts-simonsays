@@ -15,11 +15,13 @@ This is a simple React Native game inspired by the classic "Simon Says" — but 
 
    ```bash
    npm install
+   ```
 
-3. Start the development server:
+2. Start the development server:
 
    ```bash
    npx expo start
+   ```
 
 You can test on your own device using the Expo Go app or on an emulator/simulator.
 

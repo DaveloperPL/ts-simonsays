@@ -62,18 +62,6 @@ export default function App() {
     }
   };
 
-  // Save the user's record score to Firestore
-  // const saveRecord = async (score: number) => {
-  //   if (!user) return;
-  //   try {
-  //     const docRef = doc(firestore, 'scores', user.uid);
-  //     await setDoc(docRef, { score }, { merge: true });
-  //     console.log(score)
-  //     console.log(`Record saved successfully for user ${user.uid}: ${score}`);
-  //   } catch (err) {
-  //     console.error("Failed to save record:", err);
-  //   }
-  // };
   const saveRecord = async (score: number) => {
     if (!user) {
       console.error("User not logged in. Cannot save record.");
