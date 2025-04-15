@@ -1,50 +1,35 @@
-# Welcome to your Expo app 👋
+# Simon Says Tilt Game 🎮
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is a simple React Native game inspired by the classic "Simon Says" — but instead of pressing buttons, players must tilt their phone in the correct sequence. Built with Expo and React Native, the game uses motion sensors to create an engaging and active experience.
 
-## Get started
+## Features
 
-1. Install dependencies
+- 🕹️ **Single-Player Mode**: Watch a countdown, then repeat a random sequence of phone tilts (left, right, forward, back).
+- 👥 **Pass-and-Play Mode**: Two players take turns trying to match their own sequences — great for head-to-head challenges.
+- ⏱️ **Countdown Timer**: Adds intensity by limiting time to react and perform each tilt.
+- 📈 **Streak Tracking**: Tracks how many sequences you’ve completed in a row.
+
+## How to Run
+
+1. Install dependencies:
 
    ```bash
    npm install
-   ```
 
-2. Start the app
+3. Start the development server:
 
    ```bash
-    npx expo start
-   ```
+   npx expo start
 
-In the output, you'll find options to open the app in a
+You can test on your own device using the Expo Go app or on an emulator/simulator.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The core logic and screens are located in the `app/` directory. File-based routing is used to organize screens and navigation.
 
-## Get a fresh project
+## Technologies Used
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- React Native
+- Expo
+- Expo Sensors (for motion detection)
+- React Navigation
